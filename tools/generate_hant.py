@@ -60,6 +60,8 @@ def create_resources():
     outputs = [
         ("values-zh-rHK", "s2hk", HK_USAGE),
         ("values-zh-rMO", "s2hk", HK_USAGE),
+        ("values-b+yue+Hant+HK", "s2hk", HK_USAGE),
+        ("values-b+yue+Hant", "s2hk", HK_USAGE),
         ("values-zh-rTW", "s2twp", TW_USAGE),
         ("values-b+zh+Hant", "s2t", {}),
     ]
@@ -67,7 +69,7 @@ def create_resources():
         target = RES / folder / "strings.xml"
         target.parent.mkdir(exist_ok=True)
         result = convert(source, OpenCC(mode), usage)
-        if folder in ("values-zh-rHK", "values-zh-rMO"):
+        if folder in ("values-zh-rHK", "values-zh-rMO", "values-b+yue+Hant+HK", "values-b+yue+Hant"):
             cantonese = {
                 "cc_title": "控制中心",
                 "cc_inputs": "訊號來源",
@@ -169,6 +171,7 @@ def phone():
     if (!l) continue;
     const locale = String(l).replace(/_/g, '-').toLowerCase();
     // Android/Chrome zh-HK and zh-MO should not collapse into Simplified Chinese.
+    if (locale === 'yue' || locale.startsWith('yue-')) return 'zh-HK';
     const chinese = locale === 'zh' || locale.startsWith('zh-');
     if (chinese) {
       const parts = locale.split('-');

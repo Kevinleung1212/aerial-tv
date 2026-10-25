@@ -1478,6 +1478,7 @@ const LANG = (() => {
     if (!l) continue;
     const locale = String(l).replace(/_/g, '-').toLowerCase();
     // Android/Chrome zh-HK and zh-MO should not collapse into Simplified Chinese.
+    if (locale === 'yue' || locale.startsWith('yue-')) return 'zh-HK';
     const chinese = locale === 'zh' || locale.startsWith('zh-');
     if (chinese) {
       const parts = locale.split('-');

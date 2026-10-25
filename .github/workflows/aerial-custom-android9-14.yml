@@ -41,6 +41,7 @@ jobs:
           set -euo pipefail
           git add app/src/main/res/values-zh-rHK app/src/main/res/values-zh-rMO \
             app/src/main/res/values-zh-rTW app/src/main/res/values-b+zh+Hant \
+            app/src/main/res/values-b+yue+Hant app/src/main/res/values-b+yue+Hant+HK \
             app/src/main/assets/web/index.html
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
