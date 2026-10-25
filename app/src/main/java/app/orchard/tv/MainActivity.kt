@@ -53,11 +53,15 @@ import app.orchard.tv.guard.GuardSetup
 import app.orchard.tv.guard.HomeGuardService
 import app.orchard.tv.ui.home.HomeScreen
 import app.orchard.tv.ui.home.LiveFilm
+import app.orchard.tv.ui.home.asFocusedTile
 import app.orchard.tv.ui.theme.LocalReducedMotion
+import app.orchard.tv.ui.home.TileFaces
+import app.orchard.tv.ui.theme.FontWarmup
 import app.orchard.tv.ui.theme.canvasDensity
 import app.orchard.tv.settings.AerialSettings
 import app.orchard.tv.wallpaper.Wallpapers
 import app.orchard.tv.system.DiagLog
+import app.orchard.tv.system.FrameStats
 import app.orchard.tv.wallpaper.ScreensaverMode
 import app.orchard.tv.system.SystemScreensaver
 import app.orchard.tv.system.Diagnostics
@@ -167,6 +171,7 @@ class MainActivity : ComponentActivity() {
         // Unlocked at power-on: what the system kept. Unlocked under the locked window: nothing to
         // restore, and this is the boot's first real start.
         val fresh = savedInstanceState == null
+        FontWarmup.start(this)
         TileArtFactory.useCanvasDensity(canvasDensity(resources.displayMetrics))
         Wallpapers.init(this)
         Weather.init(this)
@@ -197,6 +202,7 @@ class MainActivity : ComponentActivity() {
         })
         if (DiagLog.modeSwitch(this)) preferSmoothestRefreshRate() else DiagLog.i("refresh rate left as it is (mode_switch off)")
         if (DiagLog.softLayer(this)) window.decorView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+        FrameStats.attach(window)
         logWindow()
 
         setContent {
@@ -251,6 +257,23 @@ class MainActivity : ComponentActivity() {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
+    }
+
+    /**
+     * The system is short of memory. On a 1-2 GB TV Aerial is killed in the background while a
+     * video plays, and Home then starts cold at the next press of Home (issue #294); what it can
+     * make again cheaply goes first, so that it is less likely to be the process picked.
+     */
+    @Suppress("DEPRECATION")
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        // Memory running low, or Aerial in the background on the system's list to kill. Not merely
+        // Home out of sight (UI_HIDDEN, every time an app opens): coming back, the first moves along
+        // the row would make the focused faces again on the main thread.
+        if (level < TRIM_MEMORY_RUNNING_LOW || level == TRIM_MEMORY_UI_HIDDEN) return
+        DiagLog.i("trim memory, level $level")
+        Wallpapers.trimMemory()
+        TileFaces.trimMemory()
     }
 
     override fun onDestroy() {
@@ -333,6 +356,8 @@ class MainActivity : ComponentActivity() {
      */
     private fun preferSmoothestRefreshRate() {
         if (Build.VERSION.SDK_INT < 31) return
+        // Twice the frames is twice the GPU's work: Lite stays at the rate the TV chose.
+        if (AerialSettings.lite) return DiagLog.i("refresh rate left as it is (lite effects)")
         val display = display ?: return
         val current = display.mode
         val seamless = current.alternativeRefreshRates
@@ -422,12 +447,13 @@ class MainActivity : ComponentActivity() {
         // the same format, so there is no black between them; the dream would be a new player in a
         // new window, and showed black even in 4K (TCL MT5879).
         val carry = Wallpapers.selectedId == Wallpapers.LIVE && Wallpapers.screensaver == ScreensaverMode.Aerial
-        if (!carry && SystemScreensaver.isAerials(this)) {
+        if (!carry && !dreamFails && SystemScreensaver.isAerials(this)) {
             // The dream's film needs the decoder the wallpaper's holds: TCL MT5879 failed Dolby
             // Vision beside it and the dream fell back to 4K HEVC.
             LiveFilm.onHome?.letDecoderGo()
             if (SystemScreensaver.startDream(this)) {
                 DiagLog.i("screensaver starts as the system's dream")
+                dreamAskedAt = SystemClock.uptimeMillis()
                 return
             }
             LiveFilm.onHome?.goOn()
@@ -440,6 +466,22 @@ class MainActivity : ComponentActivity() {
         idleHandler.postDelayed(releaseScreen, SCREENSAVER_HOLD_MS)
     }
     private val releaseScreen = Runnable { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+
+    /**
+     * When Aerial last asked the system for its dream. The dream's starter closes at once and Home
+     * resumes; a dream that shows pauses it again within a moment. Hisense VIDAA (MT9655, Android
+     * 14, issue #525; T963D4, Android 11, issue #533) never shows it, so Home stayed in front, its
+     * wallpaper's film let go for nothing.
+     */
+    private var dreamAskedAt = Long.MIN_VALUE / 2
+    private val dreamCheck = Runnable {
+        // Up to Android 10 the dream is a window over Home, which stays resumed: the focus says.
+        if (!vm.resumed || !hasWindowFocus()) return@Runnable
+        dreamFails = true
+        DiagLog.i("the system's dream did not show; Aerial's own screensaver instead")
+        LiveFilm.onHome?.goOn()
+        startScreensaver(asked = false)
+    }
     private var swallowKeyUp = -1
 
     /**
@@ -623,6 +665,7 @@ class MainActivity : ComponentActivity() {
     private fun resumeWork() {
         vm.resumed = true
         DiagLog.i("onResume; screensaver after ${idleBeforeScreensaver() / 1000} s")
+        if (SystemClock.uptimeMillis() - dreamAskedAt < 1_000) idleHandler.postDelayed(dreamCheck, 1_500)
         restartIdleTimer()
         GuardSetup.setHomeInFront(this, true)
         HomeGuardService.onAerialResumed()
@@ -645,6 +688,7 @@ class MainActivity : ComponentActivity() {
         GuardSetup.setHomeInFront(this, false)
         HomeGuardService.onAerialPaused()
         idleHandler.removeCallbacks(showScreensaver)
+        idleHandler.removeCallbacks(dreamCheck)
         hideScreensaver()
     }
 
@@ -671,7 +715,7 @@ class MainActivity : ComponentActivity() {
         if (HomeGuardService.isStockHome(app.packageName) &&
             HomeGuardService.openStockLauncher(app.packageName) { runCatching { startActivity(app.launchIntent()) }.isSuccess }
         ) return
-        val options = bounds?.let {
+        val options = bounds?.asFocusedTile()?.let {
             ActivityOptions.makeScaleUpAnimation(
                 window.decorView, it.left.toInt(), it.top.toInt(), it.width.toInt(), it.height.toInt(),
             ).toBundle()
@@ -693,6 +737,9 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
+        /** The system's dream did not show when asked (see dreamCheck); for this process. */
+        private var dreamFails = false
+
         /** How Home Guard and the boot receiver bring Aerial back: the same task the launcher entry uses. */
         fun bringBackIntent(context: Context): Intent =
             Intent(context, MainActivity::class.java)

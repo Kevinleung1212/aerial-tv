@@ -39,6 +39,8 @@ import java.net.URL
  * checked in the morning kept offering nothing until the next day (1.22 to 1.25 on 2026-10-22).
  */
 object Updates {
+    /** Private fork: upstream update checks and APK downloads are disabled. */
+    private const val CUSTOM_IN_APP_UPDATES_ENABLED = false
     private const val TAG = "AerialUpdates"
     private const val PREFS = "updates"
     private const val VERSION_URL = "https://aerial.qust.me/download/version.txt"
@@ -68,6 +70,11 @@ object Updates {
     private var lastAttempt = 0L
 
     fun init(context: Context) {
+        if (!CUSTOM_IN_APP_UPDATES_ENABLED) {
+            available = null
+            install = Install.Idle
+            return
+        }
         if (started) return
         started = true
         prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -84,6 +91,7 @@ object Updates {
      * release out an hour ago was not shown there for hours more (issue #301).
      */
     fun checkIfStale(force: Boolean = false, maxAgeMs: Long = CHECK_EVERY_MS) {
+        if (!CUSTOM_IN_APP_UPDATES_ENABLED) return
         if (!started) return
         val now = System.currentTimeMillis()
         if (!force && (now - lastAttempt < RETRY_MS || now - prefs.getLong("checked_at", 0) < maxAgeMs)) return
@@ -149,7 +157,7 @@ object Updates {
     private const val PACKAGE = "app.orchard.tv"
 
     /** Whether this copy can update itself from the release at all. */
-    fun canInstall(context: Context): Boolean = context.packageName == PACKAGE
+    fun canInstall(context: Context): Boolean = CUSTOM_IN_APP_UPDATES_ENABLED && context.packageName == PACKAGE
 
     /**
      * Downloads this flavor's APK of the latest release and opens the system installer on it.
@@ -159,6 +167,10 @@ object Updates {
      * with this copy's key and no older, or the installer would only fail with a less clear message.
      */
     fun install(context: Context) {
+        if (!CUSTOM_IN_APP_UPDATES_ENABLED) {
+            install = Install.Failed(Failure.Blocked)
+            return
+        }
         if (install is Install.Downloading) return
         val app = context.applicationContext
         if (!canInstall(app)) { install = Install.Failed(Failure.NotOfficial); return }

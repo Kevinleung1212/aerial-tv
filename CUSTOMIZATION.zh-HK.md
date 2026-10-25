@@ -1,11 +1,11 @@
-# Aerial 1.47 — Android 9–14 / 繁體中文（香港／粵語）定製
+# Aerial 1.48 — Android 9–14 / 繁體中文（香港／粵語）定製
 
 此定製功能位於 `feature/tvos-hant-android9-14`，原來的 `main` 不會自動改動。Fork 遵守上游 [MIT LICENSE](LICENSE)；Apple 航拍片源另有權利限制，**影片沒有打包到 APK**。
 
 ## 目前已包含
 
-- 以原作者 Aerial 1.47 為基礎：玻璃底板、App 網格、長按 OK 管理、資料夾、隱藏及卸載入口、小米已知系統 App、控制中心、Bing／14 張壁紙、航拍／相片／時鐘／自選 MP4 屏保和個性化選項
-- Aerial 1.47 手機頁：TV 相同的五列網格、拖動排序、App 改名／改圖示、資料夾、隱藏／還原、HDMI 圖示與手動名稱
+- 以原作者 Aerial 1.48 為基礎：玻璃底板、App 網格、長按 OK 管理、資料夾、隱藏及卸載入口、小米已知系統 App、控制中心、Bing／14 張壁紙、航拍／相片／時鐘／自選 MP4 屏保和個性化選項
+- Aerial 1.48 手機頁：TV 相同的五列網格、拖動排序、App 改名／改圖示、資料夾、隱藏／還原、HDMI 圖示與手動名稱
 - 新增 Android 正體中文語言資源：香港 `zh-HK`、澳門 `zh-MO`、臺灣 `zh-TW`、一般 `zh-Hant`，以及粵語 `yue-Hant-HK`。香港版主要使用繁體書面語，重點操作提示加少量廣東話措辭。
 - 手機頁按 **手機瀏覽器的系統首選語言** 自動匹配上述區域，也可在「更多」手動選擇。TV 本身依 **電視 Android 系統語言** 選擇 Android 字串。
 - 首次使用時預設：單排玻璃底板、第二排不偷看、右上角大時鐘、清晰高對比焦點。**已有用戶個人設定不會被覆蓋。**
@@ -17,7 +17,7 @@
 
 ## GitHub Actions / APK
 
-進入 [Aerial 定製 Actions](https://github.com/Kevinleung1212/aerial-tv/actions/workflows/aerial-custom-android9-14.yml)，在成功的 workflow run 頁面底部 **Artifacts** 下載 `Aerial-v1.47-Android9-14-...`。
+進入 [Aerial 定製 Actions](https://github.com/Kevinleung1212/aerial-tv/actions/workflows/aerial-custom-android9-14.yml)，在成功的 workflow run 頁面底部 **Artifacts** 下載 `Aerial-v1.48-Android9-14-...`。
 
 第一次使用沒有指定金鑰時產出的會是 **PREVIEW-DebugKey**（測試 APK），**每次 GitHub Runner 的 debug 金鑰未必相同，不能依賴直接覆蓋升級**。正式固定簽章請用自己保存的 PKCS12 keystore，並在本 Fork 的 Settings → Secrets and variables → Actions 填入：
 - `AERIAL_KEYSTORE_B64`：完整 keystore 檔案 Base64
@@ -40,3 +40,13 @@ powershell -ExecutionPolicy Bypass -File .\tools\Test-Aerial-TV.ps1 -TvIp 192.16
 `192.168.1.80` 只是一個示例，換成你電視實際 LAN IP。也可省略 `-TvIp` 使用 USB ADB。腳本只核對 API 28–34、可選安裝、啟動 Launcher、生成診斷；**不會禁用原生桌面、修改電視系統設定或授權特權**。
 
 手動檢查：玻璃 Dock、全部 App 列表、長按 OK / Menu、文件夾與隱藏、主畫面上鍵→控制中心、HDMI 切換、音量與亮度、手機掃碼拖動排序、粵語 UI、10 秒航拍背景、屏保（4K/DV 能力）、待機喚醒與切換回原生桌面。要驗證 Google TV 9／11／14，需在對應真機上測試，模擬器無法取代。
+
+## v1.48 與自動更新控制（2026-10-25）
+
+此分支現以 Aerial v1.48 (commit `cc4c62297cf2c9d4db4f465eaf48f7056809b35e`) 為基礎，保留粵語/正體中文、手機設定頁和原有布局偏好。上游 MIT LICENSE 保留不變。
+
+**已在 `Updates.kt` 禁用內建 APK 更新**：啟動不讀取舊版本通知、`checkIfStale` 不呼叫上游版本網址、`canInstall` 一律拒絕、`install` 不下載 APK 或開啟安裝器；需要更新時只可手動安裝本定製分支 GitHub Actions 產生的 APK。GitHub Actions 已改成唯讀權限，編譯時不再自動推送翻譯檔。
+
+手機掃 QR Code 的排序、資料夾、隱藏 App 以 `SharedPreferences("layout")` 儲存；壁紙、屏保、個人化及自訂圖示也儲存於 App 私人資料夾。正常重啟或同簽章升級會保留，但清除 App 資料或解除安裝會遺失。上一版的 `PREVIEW-DebugKey` 與新版簽章可能不同，不能保證直接升級。建議配置 AERIAL_* 四項固定簽章 Secrets 並備份原來簽章／設定，切勿為測試而直接卸載現有 App。
+
+模擬器 Android 9／11／14 煙霧測試不是電視硬體驗證，HDMI 與 Dolby Vision 仍須真機測試。
