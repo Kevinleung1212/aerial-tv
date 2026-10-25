@@ -1,0 +1,150 @@
+name: Aerial Custom - Android 9 to 14
+
+on:
+  push:
+    branches:
+      - feature/tvos-hant-android9-14
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Localize, test, lint, release APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    outputs:
+      artifact: ${{ steps.artifact.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Generate Traditional Chinese resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check opencc-python-reimplemented==0.1.7
+          python3 tools/generate_hant.py
+          git diff --check
+      - name: Prepare stable signing key when configured
+        id: signing
+        shell: bash
+        env:
+          KEY_B64: ${{ secrets.AERIAL_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.AERIAL_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.AERIAL_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.AERIAL_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$KEY_B64" && -z "$STORE_PASSWORD" && -z "$KEY_ALIAS" && -z "$KEY_PASSWORD" ]]; then
+            echo 'mode=PREVIEW-DebugKey' >> "$GITHUB_OUTPUT"
+            echo 'WARNING: preview APK uses a runner-specific debug signing key; not safe for direct future upgrades.' >> "$GITHUB_STEP_SUMMARY"
+          elif [[ -z "$KEY_B64" || -z "$STORE_PASSWORD" || -z "$KEY_ALIAS" || -z "$KEY_PASSWORD" ]]; then
+            echo "::error::Either set all four AERIAL_* signing secrets or none. Do not upload private keys to Git."
+            exit 1
+          else
+            mkdir -p local
+            printf '%s' "$KEY_B64" | base64 --decode > local/custom-signing.p12
+            printf 'storeFile=custom-signing.p12\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > local/signing.properties
+            chmod 600 local/custom-signing.p12 local/signing.properties
+            echo 'mode=Stable-Signed' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Verify v1.48 and disabled in-app updates
+        shell: bash
+        run: |
+          grep -F 'versionCode = 56' app/build.gradle.kts
+          grep -F 'versionName = "1.48"' app/build.gradle.kts
+          grep -F 'CUSTOM_IN_APP_UPDATES_ENABLED = false' app/src/main/java/app/orchard/tv/update/Updates.kt
+      - name: Android tests and standard release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:testStandardReleaseUnitTest :app:assembleStandardRelease
+      - name: Android Lint diagnostics (upstream issues are reported, not ignored)
+        id: lint
+        continue-on-error: true
+        run: ./gradlew --no-daemon :app:lintStandardRelease
+      - name: Record Android Lint status
+        if: steps.lint.outcome == 'failure'
+        run: |
+          echo 'WARNING: Android Lint reported issues. See full Lint diagnostics and uploaded report; APK compilation and unit tests are checked separately.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Show full Lint diagnostics
+        if: always()
+        shell: bash
+        run: |
+          for f in app/build/reports/lint-results-*.txt; do
+            if [[ -f "$f" ]]; then
+              echo "=== $f ==="
+              grep -n -E 'Error:|Warning:' "$f" | head -n 120 || true
+            fi
+          done
+      - name: Upload Lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-Lint-Failure-Reports
+          path: app/build/reports/lint-results-*
+          if-no-files-found: ignore
+      - name: Check Android SDK range and APK signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/standard/release/app-standard-release.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | head -n 15
+          sha256sum "$APK"
+      - name: Assign artifact name
+        id: artifact
+        shell: bash
+        run: echo "name=Aerial-v1.48-Android9-14-${{ steps.signing.outputs.mode }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: app/build/outputs/apk/standard/release/app-standard-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  android-emulator:
+    name: Android ${{ matrix.api }} smoke check (not physical TV)
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [28, 30, 34]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact }}
+          path: apk
+      - name: Enable KVM acceleration
+        run: |
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - name: Boot emulator and test Android API ${{ matrix.api }}
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 5
+          disable-animations: true
+          script: bash tools/check-launcher-emulator.sh apk/app-standard-release.apk ${{ matrix.api }}
+      - name: Save crash logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Emulator-API${{ matrix.api }}-CrashLog
+          path: aerial-emulator-crash.txt
+          if-no-files-found: ignore
