@@ -76,6 +76,23 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon :app:testStandardReleaseUnitTest :app:lintStandardRelease :app:assembleStandardRelease
+      - name: Show full Lint diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          for f in app/build/reports/lint-results-*.txt; do
+            if [[ -f "$f" ]]; then
+              echo "=== $f ==="
+              grep -n -E 'Error:|Warning:' "$f" | head -n 120 || true
+            fi
+          done
+      - name: Upload Lint reports when failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-Lint-Failure-Reports
+          path: app/build/reports/lint-results-*
+          if-no-files-found: ignore
       - name: Check Android SDK range and APK signature
         shell: bash
         run: |
