@@ -67,6 +67,35 @@ def create_resources():
         target = RES / folder / "strings.xml"
         target.parent.mkdir(exist_ok=True)
         result = convert(source, OpenCC(mode), usage)
+        if folder in ("values-zh-rHK", "values-zh-rMO"):
+            cantonese = {
+                "cc_title": "控制中心",
+                "cc_inputs": "訊號來源",
+                "cc_settings": "設定",
+                "cc_personalize": "個人化",
+                "cc_no_inputs": "呢部電視搵唔到可用嘅訊號來源",
+                "cc_setup_body": "只安裝咗 APK，Aerial 可以打開，但撳主頁鍵、開機或待機後都可能返去原本個桌面。",
+                "menu_to_folder": "移至資料夾",
+                "menu_new_folder": "新增資料夾",
+                "menu_out_of_folder": "移出資料夾",
+                "menu_rename_folder": "重新命名",
+                "folder_default": "資料夾",
+                "hidden_title": "已隱藏嘅應用程式",
+                "hidden_empty": "冇隱藏嘅應用程式",
+                "hidden_hint": "揀一個應用程式放返主畫面",
+                "st_home_one_row": "單排",
+                "st_home_standard": "雙排",
+                "st_sounds": "按鍵聲",
+                "input_connected": "已連接",
+                "wp_wallpaper": "壁紙",
+                "wp_screensaver": "螢幕保護程式",
+                "tile_stock_home": "原本桌面",
+            }
+            for key, text in cantonese.items():
+                pattern = re.compile(r'(<string name="' + re.escape(key) + r'">)(.*?)(</string>)', re.DOTALL)
+                result, count = pattern.subn(lambda m: m.group(1) + text + m.group(3), result)
+                if count != 1:
+                    raise RuntimeError(f"Missing HK UI string: {key}")
         result = result.replace("<resources>", '<resources>\n    <string name="app_name">Aerial</string>', 1)
         target.write_text(result, encoding="utf-8")
         got = string_ids(target)
@@ -131,7 +160,9 @@ def phone():
         )
         html = html[:end+1] + fragment + html[end+1:]
     else:
-        raise RuntimeError("Phone table was already generated: check for conflicting source changes")
+        # A subsequent CI run on the generated branch must be idempotent.
+        print("Phone Traditional Chinese tables already generated")
+        return
 
     old = """  for (const l of prefs) { if (!l) continue; const c = String(l).toLowerCase().split('-')[0]; if (LANGS.includes(c)) return c; }"""
     new = """  for (const l of prefs) {
