@@ -62,15 +62,17 @@ data class AppEntry(
 fun sourceEntry(context: Context, source: TvSource): AppEntry {
     val key = SOURCE_KEY_PREFIX + source.id
     val look = SourceLooks.of(source.id)
-    val name = look?.name ?: look?.device?.let { context.getString(it.label) }
+    // Respect a manually chosen HDMI type/name; auto-classify only informative CEC names.
+    val detectedDevice = look?.device ?: SourceDevice.fromCecName(source.deviceName)
+    val name = look?.name ?: look?.device?.let { context.getString(it.label) } ?: source.deviceName
     // Home arranges its tiles on every move and hide; the art is made again only when it changes.
     val made = SourceArt(look, source.label, source.deviceName, CustomIcons.stamp(key), TileArtFactory.W)
     val art = synchronized(sourceArt) { sourceArt[key]?.takeIf { it.first == made }?.second } ?: run {
         val custom = CustomIcons.load(key)
         (if (custom != null) TileArtFactory.fromBanner(android.graphics.drawable.BitmapDrawable(android.content.res.Resources.getSystem(), custom))
         // A chosen device's mark goes on alone, its name on the caption; a typed name still shows.
-        else if (look?.device != null && look.name == null) TileArtFactory.forSource(source.kind, null, null, look.device)
-        else if (name != null) TileArtFactory.forSource(source.kind, name, source.label, look?.device)
+        else if (detectedDevice != null && look?.name == null) TileArtFactory.forSource(source.kind, null, null, detectedDevice)
+        else if (name != null) TileArtFactory.forSource(source.kind, name, source.label, detectedDevice)
         else TileArtFactory.forSource(source.kind, source.label, source.deviceName))
             .also { synchronized(sourceArt) { sourceArt[key] = made to it } }
     }
