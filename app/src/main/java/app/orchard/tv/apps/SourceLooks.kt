@@ -51,6 +51,27 @@ enum class SourceDevice(val key: String, @StringRes val label: Int, val top: Int
 
     companion object {
         fun of(key: String?) = entries.firstOrNull { it.key == key }
+
+        /**
+         * Infer a device type only from a non-generic HDMI-CEC product name.
+         * Firmware that exposes HDMI 1 or "Playback 1" cannot reliably identify the device.
+         * An explicit choice in SourceLooks always wins.
+         */
+        fun fromCecName(deviceName: String?): SourceDevice? {
+            val n = deviceName?.trim()?.lowercase(java.util.Locale.ROOT) ?: return null
+            if (n.isBlank()) return null
+            return when {
+                "apple tv" in n || "appletv" in n -> AppleTv
+                "playstation" in n || Regex("\\bps[345]\\b").containsMatchIn(n) -> PlayStation
+                "nintendo" in n || "switch" in n -> Switch
+                "xbox" in n -> Xbox
+                "macbook" in n || "mac mini" in n || "imac" in n ||
+                    "windows" in n || "computer" in n || "laptop" in n || "desktop pc" in n -> Computer
+                "set-top" in n || "set top" in n || "tv box" in n || "iptv" in n -> SetTopBox
+                "soundbar" in n || "speaker" in n -> Speaker
+                else -> null
+            }
+        }
     }
 }
 
