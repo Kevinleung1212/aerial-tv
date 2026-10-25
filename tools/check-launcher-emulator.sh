@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-APK="\${1:?Pass built APK}"
-API="\${2:?Pass emulator API level}"
+APK="${1:?Pass built APK}"
+API="${2:?Pass emulator API level}"
 test -s "$APK" || { echo "APK file missing"; exit 1; }
 REPORTED="$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
 test "$REPORTED" = "$API" || { echo "Wrong emulator API: expected $API, got $REPORTED"; exit 1; }
