@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Aerial</string>
     <string name="guard_name">Aerial 桌面守護</string>
     <string name="guard_description">在不允許更換桌面的電視上，讓 Aerial 保持為主屏幕。不會讀取任何屏幕內容。</string>
 
