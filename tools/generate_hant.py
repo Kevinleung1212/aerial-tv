@@ -98,7 +98,6 @@ def create_resources():
                 result, count = pattern.subn(lambda m: m.group(1) + text + m.group(3), result)
                 if count != 1:
                     raise RuntimeError(f"Missing HK UI string: {key}")
-        result = result.replace("<resources>", '<resources>\n    <string name="app_name">Aerial</string>', 1)
         target.write_text(result, encoding="utf-8")
         got = string_ids(target)
         if not needed.issubset(got):
