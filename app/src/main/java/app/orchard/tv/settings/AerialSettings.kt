@@ -69,7 +69,7 @@ object AerialSettings {
     var oneRowHome by mutableStateOf(true); private set
 
     /** In one-row mode, the top of the second row peeking under the first; off hides it until you go down. */
-    var peekNextRow by mutableStateOf(true); private set
+    var peekNextRow by mutableStateOf(false); private set
 
     /** Interface sounds (system/Sounds), as tvOS plays them on every press. */
     var uiSounds by mutableStateOf(UiSounds.Tv); private set
@@ -78,10 +78,10 @@ object AerialSettings {
     var homePlate by mutableStateOf(true); private set
 
     /** The clock, with the date and weather, in the top right instead of the top left. */
-    var clockRight by mutableStateOf(false); private set
+    var clockRight by mutableStateOf(true); private set
 
     /** The date and weather over a big clock above the top row, instead of one small line in the corner. */
-    var largeClock by mutableStateOf(false); private set
+    var largeClock by mutableStateOf(true); private set
 
     /** Every app's name under its tile, not only the focused one's (issue #28), the top row's on the glass plate too. */
     var showAllNames by mutableStateOf(false); private set
@@ -132,9 +132,9 @@ object AerialSettings {
         pinSet = pinHash != null
         pinArrows = prefs.getBoolean("pin_arrows", false)
         oneRowHome = prefs.getBoolean("one_row_home", true)
-        peekNextRow = prefs.getBoolean("peek_next_row", true)
-        clockRight = prefs.getBoolean("clock_right", false)
-        largeClock = prefs.getBoolean("large_clock", false)
+        peekNextRow = prefs.getBoolean("peek_next_row", false)
+        clockRight = prefs.getBoolean("clock_right", true)
+        largeClock = prefs.getBoolean("large_clock", true)
         homePlate = prefs.getBoolean("home_plate", true)
         showAllNames = prefs.getBoolean("show_all_names", false)
         // Before 1.28 this was on or off; on meant whichever sounds Aerial played.
